@@ -1,13 +1,11 @@
 import express from "express";
+// import { authenticateToken } from "../middleware/auth.middleware";
+
 const router = express.Router();
-// const apiLogger = require("../middleware/apiLogger");
-// const {
-//   authenticateToken,
-//   authorizeRole,
-// } = require("../middleware/authMiddleware");
 
 //route
-// router.use(authenticateToken, apiLogger, authorizeRole(1));
+// router.use(authenticateToken);
+
 
 // router.get("/mapAll", AllChoiceController.mapAll);
 

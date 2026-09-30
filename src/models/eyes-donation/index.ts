@@ -71,6 +71,17 @@ Object.keys(db).forEach((modelName) => {
   }
 });
 
+// 4.5 เขียนกำหนดความสัมพันธ์ (Associations) แบบ Manual ที่นี่
+db.OptionType.hasMany(db.Option, {
+  foreignKey: "options_type_id",
+  as: "options",
+});
+
+db.Option.belongsTo(db.OptionType, {
+  foreignKey: "options_type_id",
+  as: "optionType",
+});
+
 // 5. ส่งออกระบบไปใช้ร่วมกัน
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;
