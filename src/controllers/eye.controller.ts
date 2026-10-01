@@ -82,7 +82,7 @@ export class EyeController {
   static async updateDonorConsent(req: Request, res: Response) {
     try {
       const id = Number(req.params.id);
-      
+
       // ดักจับกรณีที่ไม่ได้ส่ง id มาใน URL หรือค่าไม่ใช่ตัวเลข
       if (isNaN(id)) {
         return res.status(400).json({
@@ -105,28 +105,42 @@ export class EyeController {
       });
     }
   }
-  
+
   static async deleteDonorConsent(req: Request, res: Response) {
     try {
-        const id = Number(req.params.id);
-        
-        if (isNaN(id)) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid ID in URL"
-            });
-        }
+      const id = Number(req.params.id);
 
-        const result = await DeleteDonationService.deleteDonorConsent(id);
-        return res.status(200).json({
-            success: true,
-            message: result.message,
+      if (isNaN(id)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid ID in URL"
         });
+      }
+
+      const result = await DeleteDonationService.deleteDonorConsent(id);
+      return res.status(200).json({
+        success: true,
+        message: result.message,
+      });
     } catch (error: any) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
+      return res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+  }
+  static async getStatistics(req: Request, res: Response) {
+    try {
+      const result = await DonationIndexService.getStatistics(req.query as any);
+      res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: error.message,
+      });
     }
   }
 };

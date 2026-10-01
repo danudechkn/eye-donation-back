@@ -170,7 +170,7 @@ export class DonationIndexService {
     static async getById(id: number) {
         const caseData = await db.DonorCase.findByPk(id);
         if (!caseData) {
-            throw new Error("Data not found (��辺�������ʺ�ԨҤ���)");
+            throw new Error("Data not found (��辺�������ʺ�ԨҤ���)");
         }
         const rawCase = caseData.toJSON ? caseData.toJSON() : caseData;
         const { createdAt, updatedAt, ...cleanCase } = rawCase;
@@ -193,6 +193,104 @@ export class DonationIndexService {
             icd10: patientInfo.icd10 || null,
         };
     }
+    static async getStatistics(query?: { startDate?: string; endDate?: string }) {
+        const where: any = {};
+
+        // รองรับการ filter ช่วงวันที่ (ถ้ามีการส่ง query มา เช่น ดูสถิติเฉพาะปี/เดือนนี้)
+        if (query?.startDate && query?.endDate) {
+            where.createdAt = {
+                [Op.between]: [new Date(`${query.startDate} 00:00:00`), new Date(`${query.endDate} 23:59:59`)],
+            };
+        }
+
+        const allCases = await db.DonorCase.findAll({
+            where,
+            order: [["createdAt", "ASC"]],
+        });
+
+        // Helper functions รองรับทั้ง options.id จาก seeder และ options.value ปกติ
+        const isPotential = (c: any) => c.potential === 1 || c.potential === 3; // 3 คือ Yes
+        const isEvaluated = (c: any) => c.chkpotential === 1 || c.chkpotential === 5; // 5 คือ Evaluated
+        const isWardToTc = (c: any) => c.wardtotc === 1 || c.wardtotc === 7; // 7 คือ แจ้ง TC แล้ว
+        const isNegotiateSucc = (c: any) => c.negotiate_succ === 1 || c.negotiate_succ === 11; // 11 คือ สำเร็จ
+        const isNegotiateFail = (c: any) => c.negotiate_succ === 2 || c.negotiate_succ === 12; // 12 คือ ไม่สำเร็จ
+        const isNegotiated = (c: any) => c.negotiate === 1 || c.negotiate === 9 || isNegotiateSucc(c) || isNegotiateFail(c); // เจรจาแล้ว หรือมีผลการเจรจา
+        const isGetEyeSucc = (c: any) => c.geteye === 1 || c.geteye === 13; // 13 คือ จัดเก็บได้
+        const isGetEyeFail = (c: any) => c.geteye === 2 || c.geteye === 14; // 14 คือ จัดเก็บไม่ได้
+        const getEyeCount = (c: any) => {
+            if (c.eyetotal === 16 || c.eyetotal === 1) return 1;
+            if (c.eyetotal === 17 || c.eyetotal === 2) return 2;
+            if (c.eyetotal === 15 || c.eyetotal === 0) return 0;
+            return 0;
+        };
+
+        const totalCases = allCases.length;
+        const potentialCases = allCases.filter(isPotential).length;
+        const evaluatedCases = allCases.filter(isEvaluated).length;
+        const wardNotifiedCases = allCases.filter(isWardToTc).length;
+        const negotiatedCases = allCases.filter(isNegotiated).length;
+        const negotiateSucc = allCases.filter(isNegotiateSucc).length;
+        const negotiateFail = allCases.filter(isNegotiateFail).length;
+        const negotiateNotYet = allCases.filter((c: any) => c.negotiate_succ === null).length;
+        const getEyeSucc = allCases.filter(isGetEyeSucc).length;
+        const getEyeFail = allCases.filter(isGetEyeFail).length;
+
+        const totalEyes = allCases.reduce((sum: number, c: any) => sum + getEyeCount(c), 0);
+        const totalDonors = allCases.filter((c: any) => getEyeCount(c) > 0).length;
+
+        // 1. สรุปภาพรวม & อัตราความสำเร็จ (%) สำหรับ 4 การ์ดบน
+        const summary = {
+            total_cases: totalCases,
+            potential_cases: potentialCases,
+            potential_rate: totalCases > 0 ? Number(((potentialCases / totalCases) * 100).toFixed(1)) : 0,
+            consented_cases: negotiateSucc,
+            consented_rate: negotiatedCases > 0 ? Number(((negotiateSucc / negotiatedCases) * 100).toFixed(1)) : 0,
+            negotiated_cases: negotiatedCases,
+            total_eyes_collected: totalEyes, // ตัวเลขช่อง "0 ดวงตา"
+            total_donors: totalDonors,       // ตัวเลขช่อง "0 ผู้บริจาค"
+            negotiate_success_rate: negotiatedCases > 0 ? Number(((negotiateSucc / negotiatedCases) * 100).toFixed(1)) : 0,
+            procurement_success_rate: negotiateSucc > 0 ? Number(((getEyeSucc / negotiateSucc) * 100).toFixed(1)) : 0,
+        };
+
+        // 2. ลำดับขั้นตอน (Funnel Stage)
+        const funnel = {
+            total_cases: totalCases,
+            potential_cases: potentialCases,
+            evaluated_cases: evaluatedCases,
+            ward_notified: wardNotifiedCases,
+            negotiated: negotiatedCases,
+            negotiate_success: negotiateSucc,
+            geteye_success: getEyeSucc,
+        };
+
+        // 3. สัดส่วนและประเภท (Distribution สำหรับ Donut Charts)
+        const breakdown = {
+            death_type: {
+                brain_death: allCases.filter((c: any) => c.braincardiac === 1).length,
+                cardiac_death: allCases.filter((c: any) => c.braincardiac === 2).length,
+            },
+            negotiate_status: {
+                success: negotiateSucc,
+                failed: negotiateFail,
+                not_yet: negotiateNotYet,
+            },
+            geteye_status: {
+                success: getEyeSucc,
+                failed: getEyeFail,
+            },
+            eyes_yield: {
+                two_eyes: allCases.filter((c: any) => getEyeCount(c) === 2).length,
+                one_eye: allCases.filter((c: any) => getEyeCount(c) === 1).length,
+                zero_eye: allCases.filter((c: any) => getEyeCount(c) === 0).length,
+            },
+        };
+        return {
+            summary,
+            funnel,
+            breakdown
+        };
+    }
 }
+
 
 

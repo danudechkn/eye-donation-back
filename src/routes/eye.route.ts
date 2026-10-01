@@ -20,4 +20,6 @@ router.put("/donor-cases/:id", EyeController.updateDonorConsent);
 // DELETE /api/eye/donor-cases/:id - ลบข้อมูลผู้ป่วย
 router.delete("/donor-cases/:id", EyeController.deleteDonorConsent);
 
+// GET /api/eye/statistics - ดึงสถิติต่างๆ
+router.get("/statistics", EyeController.getStatistics);
 export default router;
