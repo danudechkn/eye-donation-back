@@ -170,7 +170,7 @@ export class DonationIndexService {
     static async getById(id: number) {
         const caseData = await db.DonorCase.findByPk(id);
         if (!caseData) {
-            throw new Error("Data not found (��辺�������ʺ�ԨҤ���)");
+            throw new Error("Data not found");
         }
         const rawCase = caseData.toJSON ? caseData.toJSON() : caseData;
         const { createdAt, updatedAt, ...cleanCase } = rawCase;
