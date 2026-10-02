@@ -1,4 +1,4 @@
-import { SearchPatService } from "../pat/serchPat.service";
+﻿import { SearchPatService } from "../pat/serchPat.service";
 import { Op } from "sequelize";
 import db from "../../models/eyes-donation";
 import dbPPK from "../../models/ppkhosp";
@@ -80,7 +80,7 @@ export class DonationIndexService {
             where[Op.or] = searchConditions;
         }
 
-        // 1. ดึงข้อมูลจากฐานข้อมูล donor_cases
+        // 1. เธ”เธถเธเธเนเธญเธกเธนเธฅเธเธฒเธเธเธฒเธเธเนเธญเธกเธนเธฅ donor_cases
         const { count: total, rows: dataForm } = await db.DonorCase.findAndCountAll({
             where,
             limit,
@@ -88,7 +88,7 @@ export class DonationIndexService {
             order: [["createdAt", "DESC"]],
         });
 
-        // ถ้าไม่มีข้อมูล ให้ return array ว่าง
+        // เธ–เนเธฒเนเธกเนเธกเธตเธเนเธญเธกเธนเธฅ เนเธซเน return array เธงเนเธฒเธ
         if (dataForm.length === 0) {
             return {
                 data: [],
@@ -101,10 +101,10 @@ export class DonationIndexService {
             };
         }
 
-        // ดึงเฉพาะ hn ออกมาเพื่อไปหาข้อมูลคนไข้ใน PPK
+        // เธ”เธถเธเน€เธเธเธฒเธฐ hn เธญเธญเธเธกเธฒเน€เธเธทเนเธญเนเธเธซเธฒเธเนเธญเธกเธนเธฅเธเธเนเธเนเนเธ PPK
         const patientHns = dataForm.map((item: any) => item.hn);
 
-        // 2. ดึงข้อมูลผู้ป่วยและข้อมูลการเสียชีวิตจาก PPK ขนานกันแบบ Parallel เพื่อความเร็วสูงสุด
+        // 2. เธ”เธถเธเธเนเธญเธกเธนเธฅเธเธนเนเธเนเธงเธขเนเธฅเธฐเธเนเธญเธกเธนเธฅเธเธฒเธฃเน€เธชเธตเธขเธเธตเธงเธดเธ•เธเธฒเธ PPK เธเธเธฒเธเธเธฑเธเนเธเธ Parallel เน€เธเธทเนเธญเธเธงเธฒเธกเน€เธฃเนเธงเธชเธนเธเธชเธธเธ”
         const [patDeadRecords, patRecords] = await Promise.all([
             dbPPK.PatDead.findAll({
                 where: { hn: patientHns },
@@ -137,7 +137,7 @@ export class DonationIndexService {
             }),
         ]);
 
-        // 3. นำ dataForm มา loop เพื่อประกอบข้อมูลกับ HIS ให้ครบถ้วน
+        // 3. เธเธณ dataForm เธกเธฒ loop เน€เธเธทเนเธญเธเธฃเธฐเธเธญเธเธเนเธญเธกเธนเธฅเธเธฑเธ HIS เนเธซเนเธเธฃเธเธ–เนเธงเธ
         const result = dataForm.map((form: any) => {
             const rawForm = form.toJSON ? form.toJSON() : form;
             const deadInfo: any = patDeadRecords.find((pd: any) => String(pd.hn) === String(rawForm.hn)) || {};
@@ -145,7 +145,7 @@ export class DonationIndexService {
 
             const fullname = patientInfo.firstname
                 ? `${patientInfo.prename || ''}${patientInfo.firstname} ${patientInfo.lastname || ''}`.trim()
-                : "ไม่พบข้อมูลชื่อ";
+                : "เนเธกเนเธเธเธเนเธญเธกเธนเธฅเธเธทเนเธญ";
 
             return {
                 ...rawForm,
@@ -193,20 +193,63 @@ export class DonationIndexService {
             icd10: patientInfo.icd10 || null,
         };
     }
-    static async getStatistics(query?: { startDate?: string; endDate?: string }) {
+    static async getStatistics(query?: { startDate?: string; endDate?: string; year?: number | string; month?: number | string; months?: number | string }) {
+        const selectedYear = query?.year && query.year !== "all" ? parseInt(String(query.year), 10) : undefined;
+        const selectedMonth = query?.month && query.month !== "all" ? parseInt(String(query.month), 10) : undefined;
+
         const where: any = {};
 
-        // รองรับการ filter ช่วงวันที่ (ถ้ามีการส่ง query มา เช่น ดูสถิติเฉพาะปี/เดือนนี้)
+        // รองรับการ filter ช่วงวันที่ (ดูตาม fristtime เป็นหลัก หากไม่มีให้ดู createdAt)
         if (query?.startDate && query?.endDate) {
-            where.createdAt = {
-                [Op.between]: [new Date(`${query.startDate} 00:00:00`), new Date(`${query.endDate} 23:59:59`)],
-            };
+            where[Op.or] = [
+                {
+                    fristtime: {
+                        [Op.between]: [new Date(`${query.startDate} 00:00:00`), new Date(`${query.endDate} 23:59:59`)],
+                    },
+                },
+                {
+                    [Op.and]: [
+                        { fristtime: null },
+                        {
+                            createdAt: {
+                                [Op.between]: [new Date(`${query.startDate} 00:00:00`), new Date(`${query.endDate} 23:59:59`)],
+                            },
+                        },
+                    ],
+                },
+            ];
         }
 
         const allCases = await db.DonorCase.findAll({
             where,
-            order: [["createdAt", "ASC"]],
+            order: [
+                ["fristtime", "ASC"],
+                ["createdAt", "ASC"],
+            ],
         });
+
+        // ฟังก์ชันช่วยดึงวันที่จากเคส
+        const getCaseDate = (c: any): Date | null => {
+            const raw = c.fristtime || c.createdAt;
+            if (!raw) return null;
+            const d = new Date(raw);
+            return isNaN(d.getTime()) ? null : d;
+        };
+
+        // กรองเคสสำหรับ Summary, Funnel และ Breakdown ตามปี/เดือนที่เลือก
+        let targetCases = allCases;
+        if (selectedYear) {
+            targetCases = targetCases.filter((c: any) => {
+                const d = getCaseDate(c);
+                return d ? d.getFullYear() === selectedYear : false;
+            });
+        }
+        if (selectedMonth) {
+            targetCases = targetCases.filter((c: any) => {
+                const d = getCaseDate(c);
+                return d ? (d.getMonth() + 1) === selectedMonth : false;
+            });
+        }
 
         // Helper functions รองรับทั้ง options.id จาก seeder และ options.value ปกติ
         const isPotential = (c: any) => c.potential === 1 || c.potential === 3; // 3 คือ Yes
@@ -224,21 +267,21 @@ export class DonationIndexService {
             return 0;
         };
 
-        const totalCases = allCases.length;
-        const potentialCases = allCases.filter(isPotential).length;
-        const evaluatedCases = allCases.filter(isEvaluated).length;
-        const wardNotifiedCases = allCases.filter(isWardToTc).length;
-        const negotiatedCases = allCases.filter(isNegotiated).length;
-        const negotiateSucc = allCases.filter(isNegotiateSucc).length;
-        const negotiateFail = allCases.filter(isNegotiateFail).length;
-        const negotiateNotYet = allCases.filter((c: any) => c.negotiate_succ === null).length;
-        const getEyeSucc = allCases.filter(isGetEyeSucc).length;
-        const getEyeFail = allCases.filter(isGetEyeFail).length;
+        const totalCases = targetCases.length;
+        const potentialCases = targetCases.filter(isPotential).length;
+        const evaluatedCases = targetCases.filter(isEvaluated).length;
+        const wardNotifiedCases = targetCases.filter(isWardToTc).length;
+        const negotiatedCases = targetCases.filter(isNegotiated).length;
+        const negotiateSucc = targetCases.filter(isNegotiateSucc).length;
+        const negotiateFail = targetCases.filter(isNegotiateFail).length;
+        const negotiateNotYet = targetCases.filter((c: any) => c.negotiate_succ === null).length;
+        const getEyeSucc = targetCases.filter((c: any) => isNegotiateSucc(c) && isGetEyeSucc(c)).length;
+        const getEyeFail = targetCases.filter(isGetEyeFail).length;
 
-        const totalEyes = allCases.reduce((sum: number, c: any) => sum + getEyeCount(c), 0);
-        const totalDonors = allCases.filter((c: any) => getEyeCount(c) > 0).length;
+        const totalEyes = targetCases.reduce((sum: number, c: any) => sum + getEyeCount(c), 0);
+        const totalDonors = targetCases.filter((c: any) => getEyeCount(c) > 0).length;
 
-        // 1. สรุปภาพรวม & อัตราความสำเร็จ (%) สำหรับ 4 การ์ดบน
+        // 1. เธชเธฃเธธเธเธ เธฒเธเธฃเธงเธก & เธญเธฑเธ•เธฃเธฒเธเธงเธฒเธกเธชเธณเน€เธฃเนเธ (%) เธชเธณเธซเธฃเธฑเธ 4 เธเธฒเธฃเนเธ”เธเธ
         const summary = {
             total_cases: totalCases,
             potential_cases: potentialCases,
@@ -246,13 +289,13 @@ export class DonationIndexService {
             consented_cases: negotiateSucc,
             consented_rate: negotiatedCases > 0 ? Number(((negotiateSucc / negotiatedCases) * 100).toFixed(1)) : 0,
             negotiated_cases: negotiatedCases,
-            total_eyes_collected: totalEyes, // ตัวเลขช่อง "0 ดวงตา"
-            total_donors: totalDonors,       // ตัวเลขช่อง "0 ผู้บริจาค"
+            total_eyes_collected: totalEyes, // เธ•เธฑเธงเน€เธฅเธเธเนเธญเธ "0 เธ”เธงเธเธ•เธฒ"
+            total_donors: totalDonors,       // เธ•เธฑเธงเน€เธฅเธเธเนเธญเธ "0 เธเธนเนเธเธฃเธดเธเธฒเธ"
             negotiate_success_rate: negotiatedCases > 0 ? Number(((negotiateSucc / negotiatedCases) * 100).toFixed(1)) : 0,
-            procurement_success_rate: negotiateSucc > 0 ? Number(((getEyeSucc / negotiateSucc) * 100).toFixed(1)) : 0,
+            procurement_success_rate: negotiateSucc > 0 ? Number(Math.min(100, (getEyeSucc / negotiateSucc) * 100).toFixed(1)) : 0,
         };
 
-        // 2. ลำดับขั้นตอน (Funnel Stage)
+        // 2. เธฅเธณเธ”เธฑเธเธเธฑเนเธเธ•เธญเธ (Funnel Stage)
         const funnel = {
             total_cases: totalCases,
             potential_cases: potentialCases,
@@ -263,11 +306,11 @@ export class DonationIndexService {
             geteye_success: getEyeSucc,
         };
 
-        // 3. สัดส่วนและประเภท (Distribution สำหรับ Donut Charts)
+        // 3. เธชเธฑเธ”เธชเนเธงเธเนเธฅเธฐเธเธฃเธฐเน€เธ เธ— (Distribution เธชเธณเธซเธฃเธฑเธ Donut Charts)
         const breakdown = {
             death_type: {
-                brain_death: allCases.filter((c: any) => c.braincardiac === 1).length,
-                cardiac_death: allCases.filter((c: any) => c.braincardiac === 2).length,
+                brain_death: targetCases.filter((c: any) => c.braincardiac === 1).length,
+                cardiac_death: targetCases.filter((c: any) => c.braincardiac === 2).length,
             },
             negotiate_status: {
                 success: negotiateSucc,
@@ -279,15 +322,162 @@ export class DonationIndexService {
                 failed: getEyeFail,
             },
             eyes_yield: {
-                two_eyes: allCases.filter((c: any) => getEyeCount(c) === 2).length,
-                one_eye: allCases.filter((c: any) => getEyeCount(c) === 1).length,
-                zero_eye: allCases.filter((c: any) => getEyeCount(c) === 0).length,
+                two_eyes: targetCases.filter((c: any) => getEyeCount(c) === 2).length,
+                one_eye: targetCases.filter((c: any) => getEyeCount(c) === 1).length,
+                zero_eye: targetCases.filter((c: any) => getEyeCount(c) === 0).length,
             },
         };
+        // 4. แนวโน้มรายเดือน (ส่งทุกเดือนที่มีในระบบ และครบทั้ง 12 เดือนของทุกปี เพื่อให้หน้าบ้าน filter เองได้)
+        const thaiMonths = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+
+        const getYearMonth = (dateVal: any): { key: string; year: number; month: number } | null => {
+            if (!dateVal) return null;
+            if (typeof dateVal === "string") {
+                const match = dateVal.match(/^(\d{4})-(\d{2})/);
+                if (match) {
+                    const y = parseInt(match[1], 10);
+                    const m = parseInt(match[2], 10);
+                    if (y && m >= 1 && m <= 12) {
+                        return { key: `${y}-${match[2]}`, year: y, month: m };
+                    }
+                }
+            }
+            const d = new Date(dateVal);
+            if (isNaN(d.getTime())) return null;
+            const y = d.getFullYear();
+            const m = d.getMonth() + 1;
+            const key = `${y}-${String(m).padStart(2, "0")}`;
+            return { key, year: y, month: m };
+        };
+
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const yearsSet = new Set<number>([currentYear]);
+
+        // เธฃเธงเธเธฃเธงเธกเธเธตเธ—เธฑเนเธเธซเธกเธ”เธเธฒเธเน€เธเธช เน€เธเธทเนเธญเนเธซเนเธกเธตเนเธเธฃเธเน€เธ”เธทเธญเธเธเธฃเธเธ—เธธเธเธเธตเธ—เธตเนเธกเธตเธเนเธญเธกเธนเธฅ
+        allCases.forEach((c: any) => {
+            const dateVal = c.fristtime || c.createdAt;
+            const ym = getYearMonth(dateVal);
+            if (ym) {
+                yearsSet.add(ym.year);
+            }
+        });
+
+        const sortedYears = Array.from(yearsSet).sort((a, b) => b - a);
+
+        const monthlyMap = new Map<string, {
+            month: string;
+            year: number;
+            month_num: number;
+            label: string;
+            month_name: string;
+            cases: number;
+            screened: number;
+            total_cases: number;
+            consented: number;
+            negotiate_succ: number;
+            eyes_collected: number;
+            donors: number;
+        }>();
+
+        // เธชเธฃเนเธฒเธเนเธเธฃเธเนเธซเนเธเธฃเธเธ—เธฑเนเธ 12 เน€เธ”เธทเธญเธ (เธก.เธ. - เธ.เธ.) เธชเธณเธซเธฃเธฑเธเธ—เธธเธเธเธต
+        sortedYears.forEach((year) => {
+            for (let m = 1; m <= 12; m++) {
+                const monthStr = String(m).padStart(2, "0");
+                const key = `${year}-${monthStr}`;
+                const label = thaiMonths[m - 1];
+                monthlyMap.set(key, {
+                    month: key,
+                    year,
+                    month_num: m,
+                    label,
+                    month_name: label,
+                    cases: 0,
+                    screened: 0,
+                    total_cases: 0,
+                    consented: 0,
+                    negotiate_succ: 0,
+                    eyes_collected: 0,
+                    donors: 0,
+                });
+            }
+        });
+
+        allCases.forEach((c: any) => {
+            // เนเธเน fristtime (เธงเธฑเธเน€เธงเธฅเธฒเธ—เธตเนเธเธฑเธเธ—เธถเธ/เธฃเธฑเธเนเธเนเธเน€เธเธช) เน€เธเนเธเธซเธฅเธฑเธ เธซเธฒเธเนเธกเนเธกเธตเนเธซเนเนเธเน createdAt
+            const dateVal = c.fristtime || c.createdAt;
+            if (!dateVal) return;
+            const ym = getYearMonth(dateVal);
+            if (!ym) return;
+
+            let item = monthlyMap.get(ym.key);
+            if (!item) {
+                const monthStr = String(ym.month).padStart(2, "0");
+                const label = thaiMonths[ym.month - 1] || monthStr;
+                item = {
+                    month: ym.key,
+                    year: ym.year,
+                    month_num: ym.month,
+                    label,
+                    month_name: label,
+                    cases: 0,
+                    screened: 0,
+                    total_cases: 0,
+                    consented: 0,
+                    negotiate_succ: 0,
+                    eyes_collected: 0,
+                    donors: 0,
+                };
+                monthlyMap.set(ym.key, item);
+            }
+
+            const eyeCount = getEyeCount(c);
+            item.cases += 1;
+            item.screened += 1;
+            item.total_cases += 1;
+            if (isNegotiateSucc(c)) {
+                item.consented += 1;
+                item.negotiate_succ += 1;
+            }
+            item.eyes_collected += eyeCount;
+            if (eyeCount > 0) {
+                item.donors += 1;
+            }
+        });
+
+        const allTrends = Array.from(monthlyMap.values()).sort((a, b) => a.month.localeCompare(b.month));
+        const activeYear = selectedYear || currentYear;
+        const yearTrends = allTrends.filter((m) => m.year === activeYear);
+        const monthly_trends = yearTrends.length > 0 ? yearTrends : allTrends;
+
+        // 5. เธชเธฃเธธเธเน€เธซเธ•เธธเธเธฅเธ—เธตเนเธเธเธดเน€เธชเธ / เธเธฑเธ”เน€เธเนเธเนเธกเนเนเธ”เน (Top Reasons เน€เธเธทเนเธญเธเธฒเธฃเธเธฑเธ’เธเธฒเธเธธเธ“เธ เธฒเธ CQI)
+        const countReasons = (field: string) => {
+            const counts: Record<string, number> = {};
+            allCases.forEach((c: any) => {
+                const reason = c[field]?.trim();
+                if (reason) {
+                    counts[reason] = (counts[reason] || 0) + 1;
+                }
+            });
+            return Object.entries(counts)
+                .map(([reason, count]) => ({ reason, count }))
+                .sort((a, b) => b.count - a.count)
+                .slice(0, 5);
+        };
+
+        const top_reasons = {
+            non_evaluated: countReasons("commentnonchk"),
+            non_negotiated: countReasons("commentnonnego"),
+            non_retrieved: countReasons("commentnoget"),
+        };
+
         return {
             summary,
             funnel,
-            breakdown
+            breakdown,
+            monthly_trend: monthly_trends,
+            available_years: sortedYears,
+            top_reasons,
         };
     }
 }
