@@ -13,6 +13,7 @@ app.use(express.json());
 app.use(cors());
 
 app.use("/api", authRoutes);
+app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/public", publicRoutes);

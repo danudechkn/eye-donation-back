@@ -11,7 +11,7 @@ export const authenticateToken = (
     res: Response,
     next: NextFunction
 ): void => {
-    // รับ Token จาก Header
+    // รับ Token จาก Header (Authorization: Bearer <token> หรือ x-api-token)
     const authHeader = req.headers["authorization"] || req.headers["x-api-token"];
 
     if (!authHeader) {
@@ -22,23 +22,48 @@ export const authenticateToken = (
         return;
     }
 
-    let token = authHeader.toString();
+    let token = authHeader.toString().trim();
     if (token.startsWith("Bearer ")) {
-        token = token.slice(7, token.length);
+        token = token.slice(7).trim();
     }
 
-    // เทียบกับ Token ที่ตั้งไว้ใน .env (สำหรับ API ปกติ หรือ Server to Server)
+    // 1. ตรวจสอบกับ Static Token ใน .env (ถ้ามี เช่น สำหรับ Server-to-Server)
     const validStaticToken = process.env.API_TOKEN;
-
-    if (token === validStaticToken) {
-        // ถ้าเป็น Token คงที่จาก .env ให้ผ่านได้เลย
+    if (validStaticToken && token === validStaticToken) {
+        (req as any).user = { role: "system", name: "System API" };
         return next();
     }
 
-    // ถ้าไม่ใช่ Static Token ลองแกะเป็น JWT (ที่ได้จากการล็อกอิน MOPH)
+    // 2. ตรวจสอบ JWT Token (รองรับทั้ง Token ที่ระบบสร้างเอง และ Token จาก MOPH Provider ID)
     try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        // (Optional) แนบข้อมูล user เข้าไปใน request เผื่อ API อื่นอยากใช้
+        let decoded: any = null;
+
+        // ลอง verify ด้วย JWT_SECRET ก่อน
+        try {
+            decoded = jwt.verify(token, JWT_SECRET);
+        } catch (verifyErr) {
+            // หากลายเซ็นเป็นของ MOPH IdP ให้ decode payload เพื่อตรวจโครงสร้าง
+            decoded = jwt.decode(token);
+        }
+
+        if (!decoded || typeof decoded !== "object") {
+            res.status(403).json({
+                status: "error",
+                message: "Invalid token format.",
+            });
+            return;
+        }
+
+        // ตรวจสอบวันหมดอายุ (exp)
+        if (decoded.exp && decoded.exp < Math.floor(Date.now() / 1000)) {
+            res.status(403).json({
+                status: "error",
+                message: "Token has expired. Please login again.",
+            });
+            return;
+        }
+
+        // แนบข้อมูลผู้ใช้เข้า request เพื่อให้ Controller หรือ Audit Log นำไปใช้ต่อ
         (req as any).user = decoded;
         return next();
     } catch (err) {

@@ -1,9 +1,12 @@
-import { Router } from "express";
+﻿import { Router } from "express";
 import { EyeController } from "../controllers/eye.controller";
-// import { authenticateToken } from "../middleware/auth.middleware";
+import { authenticateToken } from "../middleware/auth.middleware";
 
 const router = Router();
-// router.use(authenticateToken);
+
+// บังคับตรวจ Token ทุก Endpoint ในโมดูลบริจาคดวงตา
+router.use(authenticateToken);
+
 // GET /api/eye/deceased-patients - ดึงข้อมูลผู้ป่วยเสียชีวิตจาก ppkhosp
 router.get("/deceased-patients", EyeController.getDeceasedPatients);
 router.post("/deceased-patients", EyeController.createDonorConsent);
@@ -22,4 +25,5 @@ router.delete("/donor-cases/:id", EyeController.deleteDonorConsent);
 
 // GET /api/eye/statistics - ดึงสถิติต่างๆ
 router.get("/statistics", EyeController.getStatistics);
+
 export default router;
