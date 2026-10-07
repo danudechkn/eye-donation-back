@@ -34,6 +34,7 @@ class DonorCase extends Model<
   declare firststaff: CreationOptional<string>;
   declare fristtime: CreationOptional<Date | null>;
   declare status: CreationOptional<number>;
+  declare is_complete: CreationOptional<number>;
   // declare region_id: CreationOptional<number | null>;
   // declare region_name: CreationOptional<string | null>;
   // declare chwpart: CreationOptional<number | null>;
@@ -150,6 +151,11 @@ DonorCase.init(
       type: DataTypes.INTEGER,
       allowNull: true,
       defaultValue: 1,
+    },
+    is_complete: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 0,
     },
     // region_id: {
     //   type: DataTypes.INTEGER,

@@ -1,5 +1,6 @@
 import db from "../../models/eyes-donation";
 import dbPPK from "../../models/ppkhosp";
+import { CompletenessHelper } from "../../utils/completeness.helper";
 
 
 export class CreateDonationService {
@@ -61,6 +62,9 @@ export class CreateDonationService {
         fristtimeValue = null;
       }
 
+      // คำนวณสถานะความครบถ้วนของข้อมูล (1 = ครบถ้วน, 0 = ไม่ครบถ้วน)
+      const isCompleteValue = CompletenessHelper.calculateCompleteness(body);
+
       // 3. บันทึกข้อมูลลง Database
       const donorData = await db.DonorCase.create(
         {
@@ -81,6 +85,7 @@ export class CreateDonationService {
           firststaff: firststaff || "-",
           fristtime: fristtimeValue,
           status: body.status !== undefined ? Number(body.status) : 1,
+          is_complete: isCompleteValue,
         },
         { transaction }
       );

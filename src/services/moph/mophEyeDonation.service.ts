@@ -1,5 +1,6 @@
 import db from "../../models/eyes-donation";
 import { SearchPatService } from "../pat/serchPat.service";
+import { CompletenessHelper } from "../../utils/completeness.helper";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -70,20 +71,39 @@ export class MophEyeDonationService {
       chwpart_name: chwpartName,
     };
 
+    const missingFields = CompletenessHelper.getMissingFields(rawCase);
+    const isComplete = rawCase.is_complete !== undefined && rawCase.is_complete !== null
+      ? Number(rawCase.is_complete)
+      : (missingFields.length === 0 ? 1 : 0);
+
     return {
       donorCase: rawCase,
       payload,
+      is_complete: isComplete,
+      missing_fields: missingFields,
     };
   }
 
   /**
-   * ส่งข้อมูลเคสบริจาคดวงตาไปยังระบบ MOPH (https://death-reg.moph.go.th/api/eye-donations)
+   * ส่งข้อมูลเคสบริจาคดวงตาไปยังระบบ MOPH 
    * เมื่อส่งสำเร็จจะปรับ status = 2
    */
   static async sendDonorCaseToMoph(donorCaseId: number, userToken?: string) {
-    const { donorCase, payload } = await this.preparePayload(donorCaseId);
+    const { donorCase, payload, is_complete, missing_fields } = await this.preparePayload(donorCaseId);
 
-    const mophApiUrl = process.env.MOPH_API_URL || "https://death-reg.moph.go.th/api/eye-donations";
+    // 🔒 ตรวจสอบความครบถ้วนของข้อมูล หากไม่ครบจะไม่ให้ส่ง
+    if (is_complete !== 1 || (missing_fields && missing_fields.length > 0)) {
+      const missingText = missing_fields && missing_fields.length > 0
+        ? ` (ยังขาด: ${missing_fields.join(", ")})`
+        : "";
+      throw new Error(`ข้อมูลเคสบริจาคยังไม่ครบถ้วน ไม่สามารถส่งไปยังระบบ MOPH ได้${missingText}`);
+    }
+
+    const mophApiUrl = process.env.MOPH_API_URL;
+
+    if (!mophApiUrl) {
+      throw new Error("MOPH API URL is not defined");
+    }
 
     // จัดการ Authorization Token (เลือกจาก Header ผู้ใช้ หรือ Token กลางใน .env)
     const token = userToken || process.env.MOPH_API_TOKEN;

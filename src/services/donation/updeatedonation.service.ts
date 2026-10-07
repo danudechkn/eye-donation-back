@@ -1,4 +1,5 @@
 import db from "../../models/eyes-donation";
+import { CompletenessHelper } from "../../utils/completeness.helper";
 
 
 export class UpdateDonationService {
@@ -36,6 +37,14 @@ export class UpdateDonationService {
                 throw new Error("Data not found (ไม่พบข้อมูลที่ต้องการอัปเดต)");
             }
 
+            // รวมข้อมูลเดิมและข้อมูลใหม่เพื่อประเมินความครบถ้วน
+            const mergedData = {
+                ...existingData.toJSON(),
+                ...body,
+                fristtime: fristtimeValue !== undefined ? fristtimeValue : existingData.fristtime,
+            };
+            const isCompleteValue = CompletenessHelper.calculateCompleteness(mergedData);
+
             // 2. ทำการ Update ข้อมูล
             await existingData.update(
                 {
@@ -55,6 +64,7 @@ export class UpdateDonationService {
                     geteye_staff,
                     firststaff,
                     fristtime: fristtimeValue,
+                    is_complete: isCompleteValue,
                     ...(body.status !== undefined ? { status: Number(body.status) } : {}),
                 },
                 { transaction }

@@ -1,8 +1,9 @@
-﻿import { SearchPatService } from "../pat/serchPat.service";
+import { SearchPatService } from "../pat/serchPat.service";
 import { Op } from "sequelize";
 import db from "../../models/eyes-donation";
 import dbPPK from "../../models/ppkhosp";
 import { DateHelper } from "../pat/helpers/date.helper";
+import { CompletenessHelper } from "../../utils/completeness.helper";
 
 export class DonationIndexService {
     static async index(query: any) {
@@ -80,7 +81,7 @@ export class DonationIndexService {
             where[Op.or] = searchConditions;
         }
 
-        // 1. เธ”เธถเธเธเนเธญเธกเธนเธฅเธเธฒเธเธเธฒเธเธเนเธญเธกเธนเธฅ donor_cases
+        // 1. ดึงข้อมูลจากฐานข้อมูล donor_cases
         const { count: total, rows: dataForm } = await db.DonorCase.findAndCountAll({
             where,
             limit,
@@ -88,7 +89,7 @@ export class DonationIndexService {
             order: [["createdAt", "DESC"]],
         });
 
-        // เธ–เนเธฒเนเธกเนเธกเธตเธเนเธญเธกเธนเธฅ เนเธซเน return array เธงเนเธฒเธ
+        // ถ้าไม่มีข้อมูล ให้ return array ว่าง
         if (dataForm.length === 0) {
             return {
                 data: [],
@@ -101,10 +102,10 @@ export class DonationIndexService {
             };
         }
 
-        // เธ”เธถเธเน€เธเธเธฒเธฐ hn เธญเธญเธเธกเธฒเน€เธเธทเนเธญเนเธเธซเธฒเธเนเธญเธกเธนเธฅเธเธเนเธเนเนเธ PPK
+        // ดึงเฉพาะ hn ออกมาเพื่อไปหาข้อมูลคนไข้ใน PPK
         const patientHns = dataForm.map((item: any) => item.hn);
 
-        // 2. เธ”เธถเธเธเนเธญเธกเธนเธฅเธเธนเนเธเนเธงเธขเนเธฅเธฐเธเนเธญเธกเธนเธฅเธเธฒเธฃเน€เธชเธตเธขเธเธตเธงเธดเธ•เธเธฒเธ PPK เธเธเธฒเธเธเธฑเธเนเธเธ Parallel เน€เธเธทเนเธญเธเธงเธฒเธกเน€เธฃเนเธงเธชเธนเธเธชเธธเธ”
+        // 2. ดึงข้อมูลผู้ป่วยและข้อมูลการเสียชีวิตจาก PPK ขนานกันแบบ Parallel เพื่อความเร็วสูงสุด
         const [patDeadRecords, patRecords] = await Promise.all([
             dbPPK.PatDead.findAll({
                 where: { hn: patientHns },
@@ -137,7 +138,7 @@ export class DonationIndexService {
             }),
         ]);
 
-        // 3. เธเธณ dataForm เธกเธฒ loop เน€เธเธทเนเธญเธเธฃเธฐเธเธญเธเธเนเธญเธกเธนเธฅเธเธฑเธ HIS เนเธซเนเธเธฃเธเธ–เนเธงเธ
+        // 3. นำ dataForm มา loop เพื่อประกอบข้อมูลกับ HIS ให้ครบถ้วน
         const result = dataForm.map((form: any) => {
             const rawForm = form.toJSON ? form.toJSON() : form;
             const deadInfo: any = patDeadRecords.find((pd: any) => String(pd.hn) === String(rawForm.hn)) || {};
@@ -145,7 +146,12 @@ export class DonationIndexService {
 
             const fullname = patientInfo.firstname
                 ? `${patientInfo.prename || ''}${patientInfo.firstname} ${patientInfo.lastname || ''}`.trim()
-                : "เนเธกเนเธเธเธเนเธญเธกเธนเธฅเธเธทเนเธญ";
+                : "ไม่พบข้อมูลชื่อ";
+
+            const missingFields = CompletenessHelper.getMissingFields(rawForm);
+            const isComplete = rawForm.is_complete !== undefined && rawForm.is_complete !== null && Number(rawForm.is_complete) === 1
+                ? 1
+                : (missingFields.length === 0 ? 1 : 0);
 
             return {
                 ...rawForm,
@@ -153,6 +159,8 @@ export class DonationIndexService {
                 fullname,
                 cid: patientInfo.citizencardno || null,
                 deathtext: deadInfo.diagdetail || null,
+                is_complete: isComplete,
+                missing_fields: missingFields,
             };
         });
 
@@ -185,12 +193,19 @@ export class DonationIndexService {
             // fallback
         }
 
+        const missingFields = CompletenessHelper.getMissingFields(cleanCase);
+        const isComplete = cleanCase.is_complete !== undefined && cleanCase.is_complete !== null && Number(cleanCase.is_complete) === 1
+            ? 1
+            : (missingFields.length === 0 ? 1 : 0);
+
         return {
             ...cleanCase,
             fullname: patientInfo.fullname || null,
             cid: patientInfo.cid || null,
             deathtext: patientInfo.deathtext || null,
             icd10: patientInfo.icd10 || null,
+            is_complete: isComplete,
+            missing_fields: missingFields,
         };
     }
     static async getStatistics(query?: { startDate?: string; endDate?: string; year?: number | string; month?: number | string; months?: number | string }) {
@@ -281,7 +296,7 @@ export class DonationIndexService {
         const totalEyes = targetCases.reduce((sum: number, c: any) => sum + getEyeCount(c), 0);
         const totalDonors = targetCases.filter((c: any) => getEyeCount(c) > 0).length;
 
-        // 1. เธชเธฃเธธเธเธ เธฒเธเธฃเธงเธก & เธญเธฑเธ•เธฃเธฒเธเธงเธฒเธกเธชเธณเน€เธฃเนเธ (%) เธชเธณเธซเธฃเธฑเธ 4 เธเธฒเธฃเนเธ”เธเธ
+        // 1. สรุปภาพรวม & อัตราความสำเร็จ (%) สำหรับ 4 การ์ดบน
         const summary = {
             total_cases: totalCases,
             potential_cases: potentialCases,
@@ -289,13 +304,13 @@ export class DonationIndexService {
             consented_cases: negotiateSucc,
             consented_rate: negotiatedCases > 0 ? Number(((negotiateSucc / negotiatedCases) * 100).toFixed(1)) : 0,
             negotiated_cases: negotiatedCases,
-            total_eyes_collected: totalEyes, // เธ•เธฑเธงเน€เธฅเธเธเนเธญเธ "0 เธ”เธงเธเธ•เธฒ"
-            total_donors: totalDonors,       // เธ•เธฑเธงเน€เธฅเธเธเนเธญเธ "0 เธเธนเนเธเธฃเธดเธเธฒเธ"
+            total_eyes_collected: totalEyes, // ตัวเลขช่อง "0 ดวงตา"
+            total_donors: totalDonors,       // ตัวเลขช่อง "0 ผู้บริจาค"
             negotiate_success_rate: negotiatedCases > 0 ? Number(((negotiateSucc / negotiatedCases) * 100).toFixed(1)) : 0,
             procurement_success_rate: negotiateSucc > 0 ? Number(Math.min(100, (getEyeSucc / negotiateSucc) * 100).toFixed(1)) : 0,
         };
 
-        // 2. เธฅเธณเธ”เธฑเธเธเธฑเนเธเธ•เธญเธ (Funnel Stage)
+        // 2. ลำดับขั้นตอน (Funnel Stage)
         const funnel = {
             total_cases: totalCases,
             potential_cases: potentialCases,
@@ -306,7 +321,7 @@ export class DonationIndexService {
             geteye_success: getEyeSucc,
         };
 
-        // 3. เธชเธฑเธ”เธชเนเธงเธเนเธฅเธฐเธเธฃเธฐเน€เธ เธ— (Distribution เธชเธณเธซเธฃเธฑเธ Donut Charts)
+        // 3. สัดส่วนและประเภท (Distribution สำหรับ Donut Charts)
         const breakdown = {
             death_type: {
                 brain_death: targetCases.filter((c: any) => c.braincardiac === 1).length,
@@ -354,7 +369,7 @@ export class DonationIndexService {
         const currentYear = now.getFullYear();
         const yearsSet = new Set<number>([currentYear]);
 
-        // เธฃเธงเธเธฃเธงเธกเธเธตเธ—เธฑเนเธเธซเธกเธ”เธเธฒเธเน€เธเธช เน€เธเธทเนเธญเนเธซเนเธกเธตเนเธเธฃเธเน€เธ”เธทเธญเธเธเธฃเธเธ—เธธเธเธเธตเธ—เธตเนเธกเธตเธเนเธญเธกเธนเธฅ
+        // รวบรวมปีทั้งหมดจากเคส เพื่อให้มีโครงเดือนครบทุกปีที่มีข้อมูล
         allCases.forEach((c: any) => {
             const dateVal = c.fristtime || c.createdAt;
             const ym = getYearMonth(dateVal);
@@ -380,7 +395,7 @@ export class DonationIndexService {
             donors: number;
         }>();
 
-        // เธชเธฃเนเธฒเธเนเธเธฃเธเนเธซเนเธเธฃเธเธ—เธฑเนเธ 12 เน€เธ”เธทเธญเธ (เธก.เธ. - เธ.เธ.) เธชเธณเธซเธฃเธฑเธเธ—เธธเธเธเธต
+        // สร้างโครงให้ครบทั้ง 12 เดือน (ม.ค. - ธ.ค.) สำหรับทุกปี
         sortedYears.forEach((year) => {
             for (let m = 1; m <= 12; m++) {
                 const monthStr = String(m).padStart(2, "0");
@@ -404,7 +419,7 @@ export class DonationIndexService {
         });
 
         allCases.forEach((c: any) => {
-            // เนเธเน fristtime (เธงเธฑเธเน€เธงเธฅเธฒเธ—เธตเนเธเธฑเธเธ—เธถเธ/เธฃเธฑเธเนเธเนเธเน€เธเธช) เน€เธเนเธเธซเธฅเธฑเธ เธซเธฒเธเนเธกเนเธกเธตเนเธซเนเนเธเน createdAt
+            // ใช้ fristtime (วันเวลาที่บันทึก/รับแจ้งเคส) เป็นหลัก หากไม่มีให้ใช้ createdAt
             const dateVal = c.fristtime || c.createdAt;
             if (!dateVal) return;
             const ym = getYearMonth(dateVal);
@@ -450,7 +465,7 @@ export class DonationIndexService {
         const yearTrends = allTrends.filter((m) => m.year === activeYear);
         const monthly_trends = yearTrends.length > 0 ? yearTrends : allTrends;
 
-        // 5. เธชเธฃเธธเธเน€เธซเธ•เธธเธเธฅเธ—เธตเนเธเธเธดเน€เธชเธ / เธเธฑเธ”เน€เธเนเธเนเธกเนเนเธ”เน (Top Reasons เน€เธเธทเนเธญเธเธฒเธฃเธเธฑเธ’เธเธฒเธเธธเธ“เธ เธฒเธ CQI)
+        // 5. สรุปเหตุผลที่ปฏิเสธ / จัดเก็บไม่ได้ (Top Reasons เพื่อการพัฒนาคุณภาพ CQI)
         const countReasons = (field: string) => {
             const counts: Record<string, number> = {};
             allCases.forEach((c: any) => {
