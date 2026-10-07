@@ -4,6 +4,7 @@ import { CreateDonationService } from "../services/donation/createdonation.servi
 import { DonationIndexService } from "../services/donation/index.service";
 import { UpdateDonationService } from "../services/donation/updeatedonation.service";
 import { DeleteDonationService } from "../services/donation/deletedonation.service";
+import { MophEyeDonationService } from "../services/moph/mophEyeDonation.service";
 
 export class EyeController {
   static async getDeceasedPatients(req: Request, res: Response) {
@@ -138,6 +139,79 @@ export class EyeController {
       });
     } catch (error: any) {
       res.status(500).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+
+  static async sendToMoph(req: Request, res: Response) {
+    try {
+      const id = Number(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid ID in URL (กรุณาระบุ ID ใน URL ให้ถูกต้อง)",
+        });
+      }
+
+      const userToken = req.headers["authorization"] || (req.headers["x-api-token"] as string);
+
+      const result = await MophEyeDonationService.sendDonorCaseToMoph(id, userToken);
+      return res.status(200).json({
+        success: true,
+        message: "ส่งข้อมูลไปยังระบบ MOPH สำเร็จ",
+        data: result,
+      });
+    } catch (error: any) {
+      return res.status(500).json({
+        success: false,
+        message: error.message || "เกิดข้อผิดพลาดในการส่งข้อมูลไป MOPH",
+      });
+    }
+  }
+
+  static async previewMophPayload(req: Request, res: Response) {
+    try {
+      const id = Number(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid ID in URL",
+        });
+      }
+
+      const result = await MophEyeDonationService.preparePayload(id);
+      return res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (error: any) {
+      return res.status(500).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+
+  static async resetMophStatus(req: Request, res: Response) {
+    try {
+      const id = Number(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid ID in URL",
+        });
+      }
+
+      const result = await MophEyeDonationService.resetMophStatus(id);
+      return res.status(200).json({
+        success: true,
+        message: result.message,
+        data: result,
+      });
+    } catch (error: any) {
+      return res.status(500).json({
         success: false,
         message: error.message,
       });

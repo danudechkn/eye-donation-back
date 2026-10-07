@@ -33,7 +33,7 @@ class DonorCase extends Model<
   declare geteye_staff: CreationOptional<string | null>;
   declare firststaff: CreationOptional<string>;
   declare fristtime: CreationOptional<Date | null>;
-  // declare hpt: CreationOptional<number>;
+  declare status: CreationOptional<number>;
   // declare region_id: CreationOptional<number | null>;
   // declare region_name: CreationOptional<string | null>;
   // declare chwpart: CreationOptional<number | null>;
@@ -146,11 +146,11 @@ DonorCase.init(
       type: DataTypes.DATE,
       allowNull: true,
     },
-    // hpt: {
-    //   type: DataTypes.INTEGER,
-    //   allowNull: false,
-    //   defaultValue: 0,
-    // },
+    status: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 1,
+    },
     // region_id: {
     //   type: DataTypes.INTEGER,
     //   allowNull: true,

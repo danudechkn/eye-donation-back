@@ -14,6 +14,16 @@ router.post("/deceased-patients", EyeController.createDonorConsent);
 // GET /api/eye/donor-cases - ดึงรายการเคสบริจาคดวงตา พร้อมค้นหาและแบ่งหน้า
 router.get("/donor-cases", EyeController.getDonorCases);
 
+// ⚠️ Specific sub-routes ต้องมาก่อน wildcard /:id เสมอ
+// POST /api/eye/donor-cases/send-moph/:id - ส่งข้อมูลเคสไปยังระบบ MOPH
+router.post("/donor-cases/send-moph/:id", EyeController.sendToMoph);
+
+// GET /api/eye/donor-cases/preview-moph/:id - ดูตัวอย่าง Payload ที่จะส่งให้ MOPH
+router.get("/donor-cases/preview-moph/:id", EyeController.previewMophPayload);
+
+// POST /api/eye/donor-cases/reset-moph-status/:id - รีเซ็ตสถานะกลับเป็น 1 (สำหรับทดสอบ)
+router.post("/donor-cases/reset-moph-status/:id", EyeController.resetMophStatus);
+
 // GET /api/eye/donor-cases/:id - ดึงข้อมูลเคสบริจาคดวงตาเดี่ยว
 router.get("/donor-cases/:id", EyeController.getDonorCaseById);
 

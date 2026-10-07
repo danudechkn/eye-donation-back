@@ -4,13 +4,13 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const JWT_SECRET = process.env.JWT_SECRET || "eye_donation_secret_key_12345";
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "12h";
+const JWT_SECRET = process.env.JWT_SECRET as string;
+const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN || "12h") as string;
 
 export class AuthController {
   /**
-   * ดึงข้อมูลผู้ใช้งานปัจจุบันจาก Token ที่ผ่านการ Verify แล้ว
-   * GET /api/me หรือ GET /api/auth/me
+   * ตรวจสอบสถานะความถูกต้องของ Token พร้อมดึงข้อมูลผู้ใช้งานปัจจุบัน
+   * GET /api/me หรือ GET /api/auth/me (รวม getMe และ verifyToken)
    */
   static async getMe(req: Request, res: Response) {
     try {
@@ -19,21 +19,28 @@ export class AuthController {
       if (!user) {
         return res.status(401).json({
           success: false,
+          valid: false,
           message: "ไม่พบข้อมูลผู้ใช้งาน หรือ Token ไม่ถูกต้อง",
         });
       }
 
       return res.status(200).json({
         success: true,
+        valid: true,
+        user,
         data: user,
       });
     } catch (error: any) {
       return res.status(500).json({
         success: false,
-        message: error.message || "เกิดข้อผิดพลาดในการดึงข้อมูลผู้ใช้งาน",
+        valid: false,
+        message: error.message || "เกิดข้อผิดพลาดในการตรวจสอบ Token หรือดึงข้อมูลผู้ใช้งาน",
       });
     }
   }
+
+  // Alias สำหรับ backward compatibility หากมี client เรียก verifyToken
+  static verifyToken = AuthController.getMe;
 
   /**
    * สร้าง/ออก Token สำหรับทดสอบหรือเข้าสู่ระบบภายใน (Mock/Direct Login)
@@ -41,7 +48,7 @@ export class AuthController {
    */
   static async login(req: Request, res: Response) {
     try {
-      const { username, password, cid, name, role, hospcode } = req.body;
+      const { username, cid, name, role, hospcode } = req.body;
 
       // ตัวอย่าง payload รองรับโครงสร้างตามระบบบริจาคดวงตา / Provider ID
       const userPayload = {
@@ -65,28 +72,6 @@ export class AuthController {
       return res.status(500).json({
         success: false,
         message: error.message || "เกิดข้อผิดพลาดในการเข้าสู่ระบบ",
-      });
-    }
-  }
-
-  /**
-   * ตรวจสอบสถานะความถูกต้องของ Token
-   * GET /api/verify หรือ GET /api/auth/verify
-   */
-  static async verifyToken(req: Request, res: Response) {
-    try {
-      const user = (req as any).user;
-
-      return res.status(200).json({
-        success: true,
-        valid: true,
-        user,
-      });
-    } catch (error: any) {
-      return res.status(500).json({
-        success: false,
-        valid: false,
-        message: error.message || "Token ไม่ถูกต้องหรือไม่สามารถใช้งานได้",
       });
     }
   }

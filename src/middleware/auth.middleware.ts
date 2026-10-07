@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 
 dotenv.config();
 
-const JWT_SECRET = process.env.JWT_SECRET || "eye_donation_secret_key_12345";
+const JWT_SECRET = process.env.JWT_SECRET as string;
 
 export const authenticateToken = (
     req: Request,
@@ -12,7 +12,14 @@ export const authenticateToken = (
     next: NextFunction
 ): void => {
     // รับ Token จาก Header (Authorization: Bearer <token> หรือ x-api-token)
-    const authHeader = req.headers["authorization"] || req.headers["x-api-token"];
+    // รับ Token จาก Header หรือ Cookie
+    let authHeader = req.headers["authorization"] || req.headers["x-api-token"];
+    if (!authHeader && req.headers.cookie) {
+        const match = req.headers.cookie.match(/(?:^|;\s*)(?:moph_token|token)=([^;]*)/);
+        if (match) {
+            authHeader = decodeURIComponent(match[1]);
+        }
+    }
 
     if (!authHeader) {
         res.status(401).json({

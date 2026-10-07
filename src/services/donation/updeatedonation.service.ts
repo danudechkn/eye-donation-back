@@ -55,6 +55,7 @@ export class UpdateDonationService {
                     geteye_staff,
                     firststaff,
                     fristtime: fristtimeValue,
+                    ...(body.status !== undefined ? { status: Number(body.status) } : {}),
                 },
                 { transaction }
             );

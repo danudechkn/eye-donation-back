@@ -80,6 +80,7 @@ export class CreateDonationService {
           geteye_staff,
           firststaff: firststaff || "-",
           fristtime: fristtimeValue,
+          status: body.status !== undefined ? Number(body.status) : 1,
         },
         { transaction }
       );

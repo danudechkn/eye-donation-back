@@ -105,11 +105,6 @@ module.exports = {
         type: Sequelize.DATE,
         allowNull: true,
       },
-      // hpt: {
-      //   type: Sequelize.INTEGER,
-      //   allowNull: false,
-      //   defaultValue: 0,
-      // },
       // region_id: {
       //   type: Sequelize.INTEGER,
       //   allowNull: true,
