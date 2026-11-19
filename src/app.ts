@@ -10,7 +10,14 @@ import eyeRoutes from "./routes/eye.route";
 const app = express();
 
 app.use(express.json());
-app.use(cors());
+app.use(
+  cors({
+    origin: process.env.CORS_ORIGIN
+      ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim())
+      : true,
+    credentials: true,
+  })
+);
 
 app.use("/api", authRoutes);
 app.use("/api/auth", authRoutes);

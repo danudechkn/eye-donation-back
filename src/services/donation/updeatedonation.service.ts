@@ -21,7 +21,6 @@ export class UpdateDonationService {
                 commentnoget,
                 negotiate_staff,
                 geteye_staff,
-                firststaff,
                 firsttime,
                 fristtime,
             } = body;
@@ -37,15 +36,16 @@ export class UpdateDonationService {
                 throw new Error("Data not found (ไม่พบข้อมูลที่ต้องการอัปเดต)");
             }
 
-            // รวมข้อมูลเดิมและข้อมูลใหม่เพื่อประเมินความครบถ้วน
+            // รวมข้อมูลเดิมและข้อมูลใหม่เพื่อประเมินความครบถ้วน (ล็อก firststaff ใช้ค่าเดิมเสมอ)
             const mergedData = {
                 ...existingData.toJSON(),
                 ...body,
+                firststaff: existingData.firststaff,
                 fristtime: fristtimeValue !== undefined ? fristtimeValue : existingData.fristtime,
             };
             const isCompleteValue = CompletenessHelper.calculateCompleteness(mergedData);
 
-            // 2. ทำการ Update ข้อมูล
+            // 2. ทำการ Update ข้อมูล (ไม่อนุญาตให้แก้ไข firststaff)
             await existingData.update(
                 {
                     hn,
@@ -62,7 +62,6 @@ export class UpdateDonationService {
                     commentnoget,
                     negotiate_staff,
                     geteye_staff,
-                    firststaff,
                     fristtime: fristtimeValue,
                     is_complete: isCompleteValue,
                     ...(body.status !== undefined ? { status: Number(body.status) } : {}),

@@ -9,8 +9,21 @@ export class MophEyeDonationService {
   /**
    * ดึงข้อมูลเคสและคนไข้เพื่อประกอบเป็น Payload ส่ง MOPH
    */
+
+
   static async preparePayload(donorCaseId: number) {
-    const caseData = await db.DonorCase.findByPk(donorCaseId);
+    const caseData = await db.DonorCase.findByPk(donorCaseId, {
+      include: [
+        { model: db.Option, as: "Braincardiac" },
+        { model: db.Option, as: "Potential" },
+        { model: db.Option, as: "Wardtotc" },
+        { model: db.Option, as: "Negotiate" },
+        { model: db.Option, as: "Chkpotential" },
+        { model: db.Option, as: "NegotiateSucc" },
+        { model: db.Option, as: "Geteye" },
+        { model: db.Option, as: "Eyetotal" },
+      ],
+    });
     if (!caseData) {
       throw new Error("Data not found (ไม่พบข้อมูลเคสบริจาคดวงตา)");
     }
@@ -27,54 +40,70 @@ export class MophEyeDonationService {
       console.warn("Could not fetch PPK patient info:", err.message);
     }
 
-    const hospitalCode = process.env.HOSPITAL_CODE;
-    const hospitalName = process.env.HOSPITAL_NAME;
-    const regionId = Number(process.env.REGION_ID);
-    const regionName = process.env.REGION_NAME;
-    const chwpart = Number(process.env.CHWPART);
-    const chwpartName = process.env.CHWPART_NAME;
+    const hospitalCode = process.env.HOSPITAL_CODE || "10664";
+    const hospitalName = process.env.HOSPITAL_NAME || "โรงพยาบาลปกเกล้า";
+    const hospitalHpt = Number(process.env.HOSPITAL_HPT || process.env.HOSPITAL_CODE || 10664);
+    const regionId = Number(process.env.REGION_ID || 6);
+    const regionName = process.env.REGION_NAME || "เขตสุขภาพ ที่ 6";
+    const chwpart = Number(process.env.CHWPART || 10);
+    const chwpartName = process.env.CHWPART_NAME || "จันทบุรี";
 
-    // จัดเตรียม Payload ตามโครงสร้าง MOPH Eye Donations API (เรียงตาม field spec)
+    // ฟังก์ชันจัดรูปแบบ firsttime เป็น YYYY-MM-DDTHH:mm:ss ตามตัวอย่าง API MOPH
+    const formatFirstTime = (val: any) => {
+      if (!val) return null;
+      const d = new Date(val);
+      if (isNaN(d.getTime())) return typeof val === "string" ? val : null;
+      const pad = (n: number) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    };
+
+    // จัดเตรียม Payload ตามตัวอย่าง Request JSON ของ MOPH Eye Donations API (หน้า 4-5)
     const payload = {
-      cid: patientInfo.cid || null,
+      cid: patientInfo.cid ? String(patientInfo.cid) : null,
       hospital_code: hospitalCode,
       hospital_name: hospitalName,
       pkpt: patientInfo.pkpt || `${rawCase.hn}${hospitalCode}`,
-      braincardiac: rawCase.braincardiac,
-      hn: rawCase.hn,
-      an: patientInfo.an || null,
+      braincardiac: rawCase.Braincardiac?.value ?? (rawCase.braincardiac === 1 ? 1 : rawCase.braincardiac === 2 ? 2 : null),
+      hn: String(rawCase.hn),
+      an: patientInfo.an ? String(patientInfo.an) : null,
       fullname: patientInfo.fullname || null,
       male: patientInfo.male || null,
-      ward: patientInfo.ward || null,
+      ward: patientInfo.wardname || (patientInfo.ward ? String(patientInfo.ward) : null),
       dchdate: patientInfo.dchdate || null,
-      age: patientInfo.age !== undefined ? patientInfo.age : null,
+      age: patientInfo.age !== undefined && patientInfo.age !== null ? Number(patientInfo.age) : null,
       deathtext: patientInfo.deathtext || null,
       icd10: patientInfo.icd10 || null,
-      potential: rawCase.potential,
-      wardtotc: rawCase.wardtotc,
-      negotiate: rawCase.negotiate,
-      chkpotential: rawCase.chkpotential,
+      potential: rawCase.Potential?.value ?? (rawCase.potential === 3 ? 1 : rawCase.potential === 4 ? 2 : rawCase.potential ? Number(rawCase.potential) : null),
+      wardtotc: rawCase.Wardtotc?.value ?? (rawCase.wardtotc === 7 ? 1 : rawCase.wardtotc === 8 ? 2 : rawCase.wardtotc ? Number(rawCase.wardtotc) : null),
+      negotiate: rawCase.Negotiate?.value ?? (rawCase.negotiate === 9 ? 1 : rawCase.negotiate === 10 ? 2 : rawCase.negotiate ? Number(rawCase.negotiate) : null),
+      chkpotential: rawCase.Chkpotential?.value ?? (rawCase.chkpotential === 5 ? 1 : rawCase.chkpotential === 6 ? 2 : rawCase.chkpotential ? Number(rawCase.chkpotential) : null),
       commentnonchk: rawCase.commentnonchk || null,
-      negotiate_succ: rawCase.negotiate_succ !== undefined ? rawCase.negotiate_succ : null,
+      negotiate_succ: rawCase.NegotiateSucc?.value ?? (rawCase.negotiate_succ === 11 ? 1 : rawCase.negotiate_succ === 12 ? 2 : rawCase.negotiate_succ !== undefined && rawCase.negotiate_succ !== null ? Number(rawCase.negotiate_succ) : null),
       commentnonnego: rawCase.commentnonnego || null,
-      geteye: rawCase.geteye,
-      eyetotal: rawCase.eyetotal,
+      geteye: rawCase.Geteye?.value ?? (rawCase.geteye === 13 ? 1 : rawCase.geteye === 14 ? 2 : rawCase.geteye !== undefined && rawCase.geteye !== null ? Number(rawCase.geteye) : null),
+      eyetotal: rawCase.Eyetotal?.value ?? (rawCase.eyetotal === 15 ? 0 : rawCase.eyetotal === 16 ? 1 : rawCase.eyetotal === 17 ? 2 : rawCase.eyetotal !== undefined && rawCase.eyetotal !== null ? Number(rawCase.eyetotal) : null),
       commentnoget: rawCase.commentnoget || null,
       negotiate_staff: rawCase.negotiate_staff || null,
       geteye_staff: rawCase.geteye_staff || null,
       firststaff: rawCase.firststaff || "-",
-      firsttime: rawCase.firsttime || null,
+      firsttime: formatFirstTime(rawCase.firsttime || rawCase.fristtime),
       region_id: regionId,
       region_name: regionName,
-      deathtext_id: patientInfo.deathtext_id || null,
+      deathtext_id: patientInfo.deathtext_id !== undefined && patientInfo.deathtext_id !== null ? Number(patientInfo.deathtext_id) : 2,
       chwpart: chwpart,
       chwpart_name: chwpartName,
     };
 
     const missingFields = CompletenessHelper.getMissingFields(rawCase);
-    const isComplete = rawCase.is_complete !== undefined && rawCase.is_complete !== null
-      ? Number(rawCase.is_complete)
-      : (missingFields.length === 0 ? 1 : 0);
+
+    // ตรวจสอบฟิลด์บังคับของผู้ป่วยจาก PPK
+    if (!patientInfo.cid) missingFields.push("เลขบัตรประชาชนผู้ป่วย (CID ใน PPK)");
+    if (!patientInfo.fullname) missingFields.push("ชื่อ-นามสกุลผู้ป่วย (ใน PPK)");
+    if (!patientInfo.dchdate) missingFields.push("วันที่เสียชีวิต (dchdate ใน PPK)");
+    if (!patientInfo.dchtime) missingFields.push("เวลาเสียชีวิต (dchtime ใน PPK)");
+    if (patientInfo.ward === undefined || patientInfo.ward === null) missingFields.push("หอผู้ป่วย (ward ใน PPK)");
+
+    const isComplete = missingFields.length === 0 ? 1 : 0;
 
     return {
       donorCase: rawCase,
@@ -86,23 +115,24 @@ export class MophEyeDonationService {
 
   /**
    * ส่งข้อมูลเคสบริจาคดวงตาไปยังระบบ MOPH 
+   * ยิงเฉพาะก้อน payload (JSON 33 ฟิลด์) ไปยัง MOPH โดยตรง
    * เมื่อส่งสำเร็จจะปรับ status = 2
    */
-  static async sendDonorCaseToMoph(donorCaseId: number, userToken?: string) {
-    const { donorCase, payload, is_complete, missing_fields } = await this.preparePayload(donorCaseId);
+  static async sendDonorCaseToMoph(donorCaseId: number, userToken?: string, customPayload?: any) {
+    let payloadToSend: any = null;
 
-    // 🔒 ตรวจสอบความครบถ้วนของข้อมูล หากไม่ครบจะไม่ให้ส่ง
-    if (is_complete !== 1 || (missing_fields && missing_fields.length > 0)) {
-      const missingText = missing_fields && missing_fields.length > 0
-        ? ` (ยังขาด: ${missing_fields.join(", ")})`
-        : "";
-      throw new Error(`ข้อมูลเคสบริจาคยังไม่ครบถ้วน ไม่สามารถส่งไปยังระบบ MOPH ได้${missingText}`);
+    // ถ้ามีการส่ง custom payload มา ให้ใช้ตัวนั้น ยิงตรงได้เลย
+    if (customPayload && typeof customPayload === "object" && Object.keys(customPayload).length > 0) {
+      payloadToSend = customPayload;
+    } else {
+      const { payload } = await this.preparePayload(donorCaseId);
+      payloadToSend = payload;
     }
 
     const mophApiUrl = process.env.MOPH_API_URL;
 
     if (!mophApiUrl) {
-      throw new Error("MOPH API URL is not defined");
+      throw new Error("MOPH API URL is not defined (กรุณากำหนด MOPH_API_URL ใน .env)");
     }
 
     // จัดการ Authorization Token (เลือกจาก Header ผู้ใช้ หรือ Token กลางใน .env)
@@ -123,7 +153,7 @@ export class MophEyeDonationService {
       const response = await fetch(mophApiUrl, {
         method: "POST",
         headers,
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payloadToSend),
       });
 
       const responseText = await response.text();
@@ -153,6 +183,7 @@ export class MophEyeDonationService {
     return {
       status: "success",
       message: "ส่งข้อมูลไปยังระบบ MOPH สำเร็จ",
+      sent_payload: payloadToSend,
       data: mophResponseData,
     };
   }

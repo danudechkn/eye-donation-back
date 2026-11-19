@@ -3,8 +3,6 @@ import { EyeController } from "../controllers/eye.controller";
 import { authenticateToken } from "../middleware/auth.middleware";
 
 const router = Router();
-
-// บังคับตรวจ Token ทุก Endpoint ในโมดูลบริจาคดวงตา
 router.use(authenticateToken);
 
 // GET /api/eye/deceased-patients - ดึงข้อมูลผู้ป่วยเสียชีวิตจาก ppkhosp

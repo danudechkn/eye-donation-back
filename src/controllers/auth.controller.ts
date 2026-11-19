@@ -6,6 +6,15 @@ dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET as string;
 const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN || "12h") as string;
+const COOKIE_MAX_AGE = 12 * 60 * 60 * 1000; // 12 ชั่วโมง
+
+const getCookieOptions = () => ({
+  httpOnly: true,
+  secure: process.env.COOKIE_SECURE === "true",
+  sameSite: (process.env.COOKIE_SAMESITE as "lax" | "strict" | "none") || "lax",
+  maxAge: COOKIE_MAX_AGE,
+  path: "/",
+});
 
 export class AuthController {
   /**
@@ -44,23 +53,35 @@ export class AuthController {
 
   /**
    * สร้าง/ออก Token สำหรับทดสอบหรือเข้าสู่ระบบภายใน (Mock/Direct Login)
+   * และบันทึก Token ลงใน HttpOnly Cookie
    * POST /api/login หรือ POST /api/auth/login
    */
   static async login(req: Request, res: Response) {
     try {
-      const { username, cid, name, role, hospcode } = req.body;
+      const { username, cid, name, role, hospcode, token: externalToken } = req.body || {};
 
-      // ตัวอย่าง payload รองรับโครงสร้างตามระบบบริจาคดวงตา / Provider ID
-      const userPayload = {
-        cid: cid || "1234567890123",
-        name: name || username || "เจ้าหน้าที่ประสานงาน",
-        role: role || "staff",
-        hospcode: hospcode || "10664",
-      };
+      let token: string;
+      let userPayload: any;
 
-      const token = jwt.sign(userPayload, JWT_SECRET, {
-        expiresIn: JWT_EXPIRES_IN as any,
-      });
+      if (externalToken && typeof externalToken === "string") {
+        token = externalToken.trim();
+        userPayload = jwt.decode(token) || { name: name || username || "เจ้าหน้าที่ประสานงาน" };
+      } else {
+        // ตัวอย่าง payload รองรับโครงสร้างตามระบบบริจาคดวงตา / Provider ID
+        userPayload = {
+          cid: cid || "1234567890123",
+          name: name || username || "เจ้าหน้าที่ประสานงาน",
+          role: role || "staff",
+          hospcode: hospcode || "10664",
+        };
+
+        token = jwt.sign(userPayload, JWT_SECRET, {
+          expiresIn: JWT_EXPIRES_IN as any,
+        });
+      }
+
+      const cookieOptions = getCookieOptions();
+      res.cookie("token", token, cookieOptions);
 
       return res.status(200).json({
         success: true,
@@ -74,6 +95,21 @@ export class AuthController {
         message: error.message || "เกิดข้อผิดพลาดในการเข้าสู่ระบบ",
       });
     }
+  }
+
+  /**
+   * ออกจากระบบและล้าง HttpOnly Cookie
+   * POST /api/logout หรือ POST /api/auth/logout
+   */
+  static async logout(_req: Request, res: Response) {
+    const { maxAge, ...clearOptions } = getCookieOptions();
+    res.clearCookie("token", clearOptions);
+    res.clearCookie("moph_token", clearOptions);
+
+    return res.status(200).json({
+      success: true,
+      message: "ออกจากระบบสำเร็จ",
+    });
   }
 }
 

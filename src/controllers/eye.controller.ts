@@ -1,3 +1,4 @@
+
 import { Request, Response } from "express";
 import { SearchPatService } from "../services/pat/serchPat.service";
 import { CreateDonationService } from "../services/donation/createdonation.service";
@@ -30,7 +31,8 @@ export class EyeController {
   static async createDonorConsent(req: Request, res: Response) {
     try {
       const { body } = req;
-      const result = await CreateDonationService.createDonorConsent(body);
+      const user = (req as any).user;
+      const result = await CreateDonationService.createDonorConsent(body, user);
       res.status(200).json({
         success: true,
         data: result
@@ -156,17 +158,20 @@ export class EyeController {
       }
 
       const userToken = req.headers["authorization"] || (req.headers["x-api-token"] as string);
+      const customPayload = req.body && Object.keys(req.body).length > 0 ? req.body : undefined;
 
-      const result = await MophEyeDonationService.sendDonorCaseToMoph(id, userToken);
+      const result = await MophEyeDonationService.sendDonorCaseToMoph(id, userToken, customPayload);
       return res.status(200).json({
         success: true,
         message: "ส่งข้อมูลไปยังระบบ MOPH สำเร็จ",
         data: result,
       });
     } catch (error: any) {
-      return res.status(500).json({
+      const statusCode = error.statusCode || (error.missing_fields?.length ? 400 : 500);
+      return res.status(statusCode).json({
         success: false,
         message: error.message || "เกิดข้อผิดพลาดในการส่งข้อมูลไป MOPH",
+        missing_fields: error.missing_fields || [],
       });
     }
   }

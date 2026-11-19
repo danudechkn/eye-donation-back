@@ -82,6 +82,39 @@ db.Option.belongsTo(db.OptionType, {
   as: "optionType",
 });
 
+db.DonorCase.belongsTo(db.Option, {
+  foreignKey: "braincardiac",
+  as: "Braincardiac"
+})
+db.DonorCase.belongsTo(db.Option, {
+  foreignKey: "potential",
+  as: "Potential"
+})
+db.DonorCase.belongsTo(db.Option, {
+  foreignKey: "chkpotential",
+  as: "Chkpotential"
+})
+db.DonorCase.belongsTo(db.Option, {
+  foreignKey: "wardtotc",
+  as: "Wardtotc"
+})
+db.DonorCase.belongsTo(db.Option, {
+  foreignKey: "negotiate",
+  as: "Negotiate"
+})
+db.DonorCase.belongsTo(db.Option, {
+  foreignKey: "negotiate_succ",
+  as: "NegotiateSucc"
+})
+db.DonorCase.belongsTo(db.Option, {
+  foreignKey: "geteye",
+  as: "Geteye"
+})
+db.DonorCase.belongsTo(db.Option, {
+  foreignKey: "eyetotal",
+  as: "Eyetotal"
+})
+
 // 5. ส่งออกระบบไปใช้ร่วมกัน
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;
