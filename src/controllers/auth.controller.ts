@@ -6,13 +6,11 @@ dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET as string;
 const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN || "12h") as string;
-const COOKIE_MAX_AGE = 12 * 60 * 60 * 1000; // 12 ชั่วโมง
 
 const getCookieOptions = () => ({
   httpOnly: true,
   secure: process.env.COOKIE_SECURE === "true",
   sameSite: (process.env.COOKIE_SAMESITE as "lax" | "strict" | "none") || "lax",
-  maxAge: COOKIE_MAX_AGE,
   path: "/",
 });
 
@@ -102,7 +100,7 @@ export class AuthController {
    * POST /api/logout หรือ POST /api/auth/logout
    */
   static async logout(_req: Request, res: Response) {
-    const { maxAge, ...clearOptions } = getCookieOptions();
+    const clearOptions = getCookieOptions();
     res.clearCookie("token", clearOptions);
     res.clearCookie("moph_token", clearOptions);
 

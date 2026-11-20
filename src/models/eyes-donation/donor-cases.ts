@@ -15,7 +15,10 @@ class DonorCase extends Model<
   // declare hospital_code: CreationOptional<string>;
   // declare hospital_name: CreationOptional<string>;
   // declare pkpt: CreationOptional<string>;
-  // declare cid: CreationOptional<string | null>;
+  declare fullname: CreationOptional<string | null>;
+  declare cid: CreationOptional<string | null>;
+  declare deathtext: CreationOptional<string | null>;
+  declare icd10: CreationOptional<string | null>;
   declare braincardiac: CreationOptional<number>;
   declare hn: CreationOptional<string>;
   // declare an: CreationOptional<string | null>;
@@ -31,6 +34,7 @@ class DonorCase extends Model<
   declare commentnoget: CreationOptional<string | null>;
   declare negotiate_staff: CreationOptional<string | null>;
   declare geteye_staff: CreationOptional<string | null>;
+  declare geteye_place: CreationOptional<string | null>;
   declare firststaff: CreationOptional<string>;
   declare fristtime: CreationOptional<Date | null>;
   declare status: CreationOptional<number>;
@@ -68,11 +72,26 @@ DonorCase.init(
     //   allowNull: false,
     //   defaultValue: "-",
     // },
-    // cid: {
-    //   type: DataTypes.STRING(13),
-    //   allowNull: true,
-    //   defaultValue: null,
-    // },
+    fullname: {
+      type: DataTypes.STRING(200),
+      allowNull: true,
+      defaultValue: null,
+    },
+    cid: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+      defaultValue: null,
+    },
+    deathtext: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
+      defaultValue: null,
+    },
+    icd10: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      defaultValue: null,
+    },
     braincardiac: {
       type: DataTypes.INTEGER,
       allowNull: false,
@@ -135,6 +154,11 @@ DonorCase.init(
     },
     geteye_staff: {
       type: DataTypes.STRING(200),
+      allowNull: true,
+      defaultValue: null,
+    },
+    geteye_place: {
+      type: DataTypes.STRING(250),
       allowNull: true,
       defaultValue: null,
     },

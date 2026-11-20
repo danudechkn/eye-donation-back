@@ -8,6 +8,10 @@ export class UpdateDonationService {
         try {
             const {
                 hn,
+                fullname,
+                cid,
+                deathtext,
+                icd10,
                 braincardiac,
                 potential,
                 chkpotential,
@@ -21,9 +25,22 @@ export class UpdateDonationService {
                 commentnoget,
                 negotiate_staff,
                 geteye_staff,
+                geteye_place,
                 firsttime,
                 fristtime,
             } = body;
+
+            const normalizeText = (val: unknown): string | null | undefined => {
+                if (val === undefined) return undefined;
+                if (val === null) return null;
+                const trimmed = String(val).trim();
+                return trimmed === "" ? null : trimmed;
+            };
+
+            const normalizedCid = normalizeText(cid);
+            if (normalizedCid !== undefined && normalizedCid !== null && !/^\d{13}$/.test(normalizedCid)) {
+                throw new Error("เลขบัตรประชาชน (CID) ต้องเป็นตัวเลขครบ 13 หลัก");
+            }
 
             let fristtimeValue: string | Date | null | undefined = firsttime !== undefined ? firsttime : fristtime;
             if (fristtimeValue === "") {
@@ -49,6 +66,10 @@ export class UpdateDonationService {
             await existingData.update(
                 {
                     hn,
+                    ...(fullname !== undefined ? { fullname: normalizeText(fullname) } : {}),
+                    ...(cid !== undefined ? { cid: normalizedCid } : {}),
+                    ...(deathtext !== undefined ? { deathtext: normalizeText(deathtext) } : {}),
+                    ...(icd10 !== undefined ? { icd10: normalizeText(icd10) } : {}),
                     braincardiac,
                     potential,
                     chkpotential,
@@ -62,6 +83,7 @@ export class UpdateDonationService {
                     commentnoget,
                     negotiate_staff,
                     geteye_staff,
+                    ...(geteye_place !== undefined ? { geteye_place: normalizeText(geteye_place) } : {}),
                     fristtime: fristtimeValue,
                     is_complete: isCompleteValue,
                     ...(body.status !== undefined ? { status: Number(body.status) } : {}),

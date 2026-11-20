@@ -57,22 +57,27 @@ export class MophEyeDonationService {
       return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
     };
 
+    const resolvedCid = rawCase.cid || patientInfo.cid || null;
+    const resolvedFullname = rawCase.fullname || patientInfo.fullname || null;
+    const resolvedDeathtext = rawCase.deathtext || patientInfo.deathtext || null;
+    const resolvedIcd10 = rawCase.icd10 || patientInfo.icd10 || null;
+
     // จัดเตรียม Payload ตามตัวอย่าง Request JSON ของ MOPH Eye Donations API (หน้า 4-5)
     const payload = {
-      cid: patientInfo.cid ? String(patientInfo.cid) : null,
+      cid: resolvedCid ? String(resolvedCid) : null,
       hospital_code: hospitalCode,
       hospital_name: hospitalName,
       pkpt: patientInfo.pkpt || `${rawCase.hn}${hospitalCode}`,
       braincardiac: rawCase.Braincardiac?.value ?? (rawCase.braincardiac === 1 ? 1 : rawCase.braincardiac === 2 ? 2 : null),
       hn: String(rawCase.hn),
       an: patientInfo.an ? String(patientInfo.an) : null,
-      fullname: patientInfo.fullname || null,
+      fullname: resolvedFullname,
       male: patientInfo.male || null,
       ward: patientInfo.wardname || (patientInfo.ward ? String(patientInfo.ward) : null),
       dchdate: patientInfo.dchdate || null,
       age: patientInfo.age !== undefined && patientInfo.age !== null ? Number(patientInfo.age) : null,
-      deathtext: patientInfo.deathtext || null,
-      icd10: patientInfo.icd10 || null,
+      deathtext: resolvedDeathtext,
+      icd10: resolvedIcd10,
       potential: rawCase.Potential?.value ?? (rawCase.potential === 3 ? 1 : rawCase.potential === 4 ? 2 : rawCase.potential ? Number(rawCase.potential) : null),
       wardtotc: rawCase.Wardtotc?.value ?? (rawCase.wardtotc === 7 ? 1 : rawCase.wardtotc === 8 ? 2 : rawCase.wardtotc ? Number(rawCase.wardtotc) : null),
       negotiate: rawCase.Negotiate?.value ?? (rawCase.negotiate === 9 ? 1 : rawCase.negotiate === 10 ? 2 : rawCase.negotiate ? Number(rawCase.negotiate) : null),
@@ -96,9 +101,9 @@ export class MophEyeDonationService {
 
     const missingFields = CompletenessHelper.getMissingFields(rawCase);
 
-    // ตรวจสอบฟิลด์บังคับของผู้ป่วยจาก PPK
-    if (!patientInfo.cid) missingFields.push("เลขบัตรประชาชนผู้ป่วย (CID ใน PPK)");
-    if (!patientInfo.fullname) missingFields.push("ชื่อ-นามสกุลผู้ป่วย (ใน PPK)");
+    // ตรวจสอบฟิลด์บังคับของผู้ป่วยจาก DB / PPK
+    if (!resolvedCid) missingFields.push("เลขบัตรประชาชนผู้ป่วย (CID ใน PPK)");
+    if (!resolvedFullname) missingFields.push("ชื่อ-นามสกุลผู้ป่วย (ใน PPK)");
     if (!patientInfo.dchdate) missingFields.push("วันที่เสียชีวิต (dchdate ใน PPK)");
     if (!patientInfo.dchtime) missingFields.push("เวลาเสียชีวิต (dchtime ใน PPK)");
     if (patientInfo.ward === undefined || patientInfo.ward === null) missingFields.push("หอผู้ป่วย (ward ใน PPK)");

@@ -38,6 +38,10 @@ export class CreateDonationService {
     try {
       const {
         hn,
+        fullname,
+        cid,
+        deathtext,
+        icd10,
         braincardiac,
         potential,
         chkpotential,
@@ -51,9 +55,21 @@ export class CreateDonationService {
         commentnoget,
         negotiate_staff,
         geteye_staff,
+        geteye_place,
         firsttime,
         fristtime,
       } = body;
+
+      const normalizeText = (val: unknown): string | null => {
+        if (typeof val !== "string") return null;
+        const trimmed = val.trim();
+        return trimmed === "" ? null : trimmed;
+      };
+
+      const normalizedCid = normalizeText(cid);
+      if (normalizedCid !== null && !/^\d{13}$/.test(normalizedCid)) {
+        throw new Error("เลขบัตรประชาชน (CID) ต้องเป็นตัวเลขครบ 13 หลัก");
+      }
 
       // ตรวจสอบฟิลด์บังคับ
       const fieldRequest = ["hn"];
@@ -63,26 +79,7 @@ export class CreateDonationService {
         }
       });
 
-      // 1. ตรวจสอบว่าข้อมูลมีอยู่แล้วในระบบหรือไม่ (ก่อนบันทึก)
-      const checkWhere: any = { hn };
-      const check = await db.DonorCase.findOne({
-        where: checkWhere,
-        transaction,
-      });
-
-      if (check) {
-        throw new Error("Data already exists (มีข้อมูลผู้ป่วยรายนี้เเล้ว)");
-      }
-
-      // 2. ตรวจสอบคนไข้ในระบบ PPK
-      const pat = await dbPPK.PatDead.findOne({
-        where: { hn },
-        attributes: ["hn"],
-      });
-
-      if (!pat) {
-        throw new Error("Data not found (ไม่พบข้อมูลคนไข้ในระบบ ppkhosp)");
-      }
+      // 2. อนุญาตให้บันทึกได้แม้ไม่มีข้อมูลคนไข้ในระบบ PPK (ppkhosp)
 
       // ใช้ชื่อผู้ใช้งานที่ login อยู่ใส่ใน firststaff อัตโนมัติ (ไม่รับค่าจาก body)
       const firststaffValue = this.resolveStaffName(user);
@@ -105,6 +102,10 @@ export class CreateDonationService {
       const donorData = await db.DonorCase.create(
         {
           hn,
+          fullname: normalizeText(fullname),
+          cid: normalizedCid,
+          deathtext: normalizeText(deathtext),
+          icd10: normalizeText(icd10),
           braincardiac,
           potential,
           chkpotential,
@@ -118,6 +119,7 @@ export class CreateDonationService {
           commentnoget,
           negotiate_staff,
           geteye_staff,
+          geteye_place: normalizeText(geteye_place),
           firststaff: firststaffValue,
           fristtime: fristtimeValue,
           status: body.status !== undefined ? Number(body.status) : 1,

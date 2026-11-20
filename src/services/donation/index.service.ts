@@ -69,6 +69,8 @@ export class DonationIndexService {
             const trimmedSearch = String(search).trim();
             const searchConditions: any[] = [
                 { hn: { [Op.like]: `%${trimmedSearch}%` } },
+                { fullname: { [Op.like]: `%${trimmedSearch}%` } },
+                { cid: { [Op.like]: `%${trimmedSearch}%` } },
                 { firststaff: { [Op.like]: `%${trimmedSearch}%` } },
                 { negotiate_staff: { [Op.like]: `%${trimmedSearch}%` } },
                 { geteye_staff: { [Op.like]: `%${trimmedSearch}%` } },
@@ -144,9 +146,10 @@ export class DonationIndexService {
             const deadInfo: any = patDeadRecords.find((pd: any) => String(pd.hn) === String(rawForm.hn)) || {};
             const patientInfo: any = deadInfo.patient || patRecords.find((p: any) => String(p.hn) === String(rawForm.hn)) || {};
 
-            const fullname = patientInfo.firstname
+            const hisFullname = patientInfo.firstname
                 ? `${patientInfo.prename || ''}${patientInfo.firstname} ${patientInfo.lastname || ''}`.trim()
-                : "ไม่พบข้อมูลชื่อ";
+                : null;
+            const fullname = rawForm.fullname || hisFullname || "ไม่พบข้อมูลชื่อ";
 
             const missingFields = CompletenessHelper.getMissingFields(rawForm);
             const isComplete = rawForm.is_complete !== undefined && rawForm.is_complete !== null && Number(rawForm.is_complete) === 1
@@ -157,8 +160,9 @@ export class DonationIndexService {
                 ...rawForm,
                 hn: rawForm.hn || null,
                 fullname,
-                cid: patientInfo.citizencardno || null,
-                deathtext: deadInfo.diagdetail || null,
+                cid: rawForm.cid || patientInfo.citizencardno || null,
+                deathtext: rawForm.deathtext || deadInfo.diagdetail || null,
+                icd10: rawForm.icd10 || deadInfo.icdcode || null,
                 is_complete: isComplete,
                 missing_fields: missingFields,
             };
@@ -200,10 +204,10 @@ export class DonationIndexService {
 
         return {
             ...cleanCase,
-            fullname: patientInfo.fullname || null,
-            cid: patientInfo.cid || null,
-            deathtext: patientInfo.deathtext || null,
-            icd10: patientInfo.icd10 || null,
+            fullname: cleanCase.fullname || patientInfo.fullname || null,
+            cid: cleanCase.cid || patientInfo.cid || null,
+            deathtext: cleanCase.deathtext || patientInfo.deathtext || null,
+            icd10: cleanCase.icd10 || patientInfo.icd10 || null,
             is_complete: isComplete,
             missing_fields: missingFields,
         };
