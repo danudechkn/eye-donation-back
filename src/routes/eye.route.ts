@@ -1,9 +1,9 @@
-﻿import { Router } from "express";
+import { Router } from "express";
 import { EyeController } from "../controllers/eye.controller";
-import { authenticateToken } from "../middleware/auth.middleware";
+import { authenticateToken, authorizeRoles } from "../middleware/auth.middleware";
 
 const router = Router();
-router.use(authenticateToken);
+router.use(authenticateToken, authorizeRoles("eye", "both", "admin"));
 
 // GET /api/eye/deceased-patients - ดึงข้อมูลผู้ป่วยเสียชีวิตจาก ppkhosp
 router.get("/deceased-patients", EyeController.getDeceasedPatients);

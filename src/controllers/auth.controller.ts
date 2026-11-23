@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
+import { UserRoleService } from "../services/user/userRole.service";
+import type { AppRole, UserStatus } from "../models/eyes-donation/users";
 
 dotenv.config();
 
@@ -56,18 +58,67 @@ export class AuthController {
    */
   static async login(req: Request, res: Response) {
     try {
-      const { username, cid, name, role, hospcode, token: externalToken } = req.body || {};
+      const body = req.body || {};
+      const {
+        username,
+        providerId,
+        provider_id,
+        name,
+        role,
+        hospcode,
+        token: externalToken,
+      } = body;
+      const provider = body.provider || body.data?.provider;
+      const healthId = body.health_id || body.data?.health_id;
 
       let token: string;
       let userPayload: any;
 
       if (externalToken && typeof externalToken === "string") {
         token = externalToken.trim();
-        userPayload = jwt.decode(token) || { name: name || username || "เจ้าหน้าที่ประสานงาน" };
+        const decoded: any = jwt.decode(token);
+        userPayload =
+          decoded && typeof decoded === "object"
+            ? { ...decoded }
+            : { name: name || username || "เจ้าหน้าที่ประสานงาน" };
+      } else if (provider && typeof provider === "object") {
+        const org =
+          Array.isArray(provider.organization) && provider.organization.length > 0
+            ? provider.organization[0]
+            : undefined;
+        const titleTh = typeof provider.title_th === "string" ? provider.title_th.trim() : "";
+        const nameTh = typeof provider.name_th === "string" ? provider.name_th.trim() : "";
+        const fullNameTh =
+          titleTh && nameTh && !nameTh.startsWith(titleTh) ? `${titleTh}${nameTh}` : nameTh;
+
+        userPayload = {
+          account_id: provider.account_id || healthId?.account_id || null,
+          health_account_id: healthId?.account_id || null,
+          provider_id: provider.provider_id || null,
+          title_th: titleTh || null,
+          firstname_th: provider.firstname_th || null,
+          lastname_th: provider.lastname_th || null,
+          name_th: nameTh || null,
+          name_eng: provider.name_eng || null,
+          name: fullNameTh || provider.name_eng || name || username || "เจ้าหน้าที่ประสานงาน",
+          email: provider.email || null,
+          position: org?.position || null,
+          position_id: org?.position_id || null,
+          hospcode: org?.hcode || hospcode || "10664",
+          hospname: org?.hname_th || null,
+          role: role || "staff",
+          health_id: healthId || undefined,
+          provider,
+        };
+
+        token = jwt.sign(userPayload, JWT_SECRET, {
+          expiresIn: JWT_EXPIRES_IN as any,
+        });
       } else {
         // ตัวอย่าง payload รองรับโครงสร้างตามระบบบริจาคดวงตา / Provider ID
+        const resolvedMockProviderId = provider_id || providerId || "PROVIDER_DEFAULT";
         userPayload = {
-          cid: cid || "1234567890123",
+          provider_id: resolvedMockProviderId,
           name: name || username || "เจ้าหน้าที่ประสานงาน",
           role: role || "staff",
           hospcode: hospcode || "10664",
@@ -78,14 +129,74 @@ export class AuthController {
         });
       }
 
+      const rawProviderId =
+        provider?.provider_id ||
+        providerId ||
+        provider_id ||
+        userPayload.provider_id ||
+        userPayload.providerId ||
+        userPayload.provider?.provider_id ||
+        body.cid ||
+        userPayload.cid ||
+        userPayload.pid ||
+        userPayload.sub;
+      const resolvedProviderId =
+        rawProviderId && String(rawProviderId).trim() !== "unknown"
+          ? String(rawProviderId).trim()
+          : undefined;
+
+      if (resolvedProviderId && !userPayload.provider_id) {
+        userPayload.provider_id = resolvedProviderId;
+      }
+
+      let appRole: AppRole = "eye";
+      let userStatus: UserStatus = "pending";
+      let isActive = false;
+      try {
+        const dbUser = await UserRoleService.resolveOrCreateUser(
+          {
+            provider_id: resolvedProviderId,
+            name:
+              name ||
+              userPayload.name ||
+              userPayload.name_th ||
+              userPayload.fullname ||
+              username,
+            position: userPayload.position || role || userPayload.role,
+            hospcode: hospcode || userPayload.hospcode,
+          },
+          { touchLastLogin: true },
+        );
+
+        if (dbUser) {
+          appRole = dbUser.app_role;
+          userStatus = dbUser.status || (dbUser.is_active ? "active" : "pending");
+          isActive = userStatus === "active";
+        }
+      } catch (roleErr) {
+        console.warn("[AuthController.login] Could not resolve user role:", roleErr);
+      }
+
       const cookieOptions = getCookieOptions();
       res.cookie("token", token, cookieOptions);
 
       return res.status(200).json({
         success: true,
         token,
-        user: userPayload,
-        message: "เข้าสู่ระบบสำเร็จ",
+        appRole,
+        userStatus,
+        isActive,
+        user: {
+          ...userPayload,
+          appRole,
+          userStatus,
+          isActive,
+        },
+        message: isActive
+          ? "เข้าสู่ระบบสำเร็จ"
+          : userStatus === "suspended"
+            ? "บัญชีผู้ใช้งานนี้ถูกระงับสิทธิ์ชั่วคราว กรุณาติดต่อผู้ดูแลระบบ"
+            : "บันทึกคำขอเข้าใช้งานแล้ว กรุณารอผู้ดูแลระบบอนุมัติสิทธิ์",
       });
     } catch (error: any) {
       return res.status(500).json({

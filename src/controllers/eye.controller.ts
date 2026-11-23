@@ -6,6 +6,7 @@ import { DonationIndexService } from "../services/donation/index.service";
 import { UpdateDonationService } from "../services/donation/updeatedonation.service";
 import { DeleteDonationService } from "../services/donation/deletedonation.service";
 import { MophEyeDonationService } from "../services/moph/mophEyeDonation.service";
+import { emitCaseChanged } from "../socket";
 
 export class EyeController {
   static async getDeceasedPatients(req: Request, res: Response) {
@@ -33,6 +34,11 @@ export class EyeController {
       const { body } = req;
       const user = (req as any).user;
       const result = await CreateDonationService.createDonorConsent(body, user);
+      emitCaseChanged("created", {
+        id: result?.id,
+        hn: result?.hn || body?.hn,
+        actor: user?.name || user?.name_th,
+      });
       res.status(200).json({
         success: true,
         data: result
@@ -95,6 +101,11 @@ export class EyeController {
       }
 
       await UpdateDonationService.updateDonorConsent(id, req.body);
+      emitCaseChanged("updated", {
+        id,
+        hn: req.body?.hn,
+        actor: (req as any).user?.name || (req as any).user?.name_th,
+      });
       return res
         .status(200)
         .json({
@@ -121,6 +132,10 @@ export class EyeController {
       }
 
       const result = await DeleteDonationService.deleteDonorConsent(id);
+      emitCaseChanged("deleted", {
+        id,
+        actor: (req as any).user?.name || (req as any).user?.name_th,
+      });
       return res.status(200).json({
         success: true,
         message: result.message,
@@ -161,6 +176,11 @@ export class EyeController {
       const customPayload = req.body && Object.keys(req.body).length > 0 ? req.body : undefined;
 
       const result = await MophEyeDonationService.sendDonorCaseToMoph(id, userToken, customPayload);
+      emitCaseChanged("moph_sent", {
+        id,
+        status: 2,
+        actor: (req as any).user?.name || (req as any).user?.name_th,
+      });
       return res.status(200).json({
         success: true,
         message: "ส่งข้อมูลไปยังระบบ MOPH สำเร็จ",
@@ -210,6 +230,11 @@ export class EyeController {
       }
 
       const result = await MophEyeDonationService.resetMophStatus(id);
+      emitCaseChanged("moph_reset", {
+        id,
+        status: 1,
+        actor: (req as any).user?.name || (req as any).user?.name_th,
+      });
       return res.status(200).json({
         success: true,
         message: result.message,
